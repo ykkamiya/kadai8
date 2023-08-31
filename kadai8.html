@@ -1,0 +1,353 @@
+<!-- サンプルコード -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sample</title>
+    <script src="js/three.js"></script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", exec); // body が読み込み終わるまで待つ
+
+      var width = 960; // レンダリング領域の幅
+      var height = 600; // レンダリング領域の高さ
+      var border = 100; // 床の幅
+      var scene; // シーン
+      var camera; // カメラ
+      var renderer; // レンダラー
+      var light; // ライト
+
+      var snowball_1; // 雪玉オブジェクト1
+      var snowball_2; // 雪玉オブジェクト2
+
+      var snowball_focus = 1; //現在操作している雪玉を管理する変数
+
+      var speed = 2.0; // 雪玉の初期速度
+      var rads = 10; // 雪玉の初期半径
+
+      var slow = 0; // 減速度
+      var slow_1 = 0; //減速度(雪玉1)
+      var slow_2 = 0; //減速度(雪玉2)
+
+      var movespeed; //雪玉の現在の移動速度
+      var distance; //雪玉間の距離
+
+      var shiftX = 0, // X座標移動用
+        shiftZ = 0; // Z座標移動用
+
+      var isPressedkey = { //打鍵フラグ
+        w: false,
+        a: false,
+        s: false,
+        d: false,
+        v: false,
+      };
+
+      var isEnd = false; // ゲームオーバーのフラグ
+      var ratio_snowman = 0.8; //雪だるまの理想比率
+      var goodscale_snowman = 9.0; //雪だるまの理想サイズ
+      var score;
+
+      function exec() {
+        // シーンを作る
+        scene = new THREE.Scene();
+        // ライトの設定
+        light = new THREE.DirectionalLight(0xffffff, 1.0);
+        light.position.set(-1, 1, 1); // ライトの向きを変更
+        scene.add(light);
+        var amb_light = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(amb_light);
+
+        // キーを押したとき
+        document.addEventListener("keydown", function (e) {
+          switch (e.key) {
+            case "w":
+              if (isPressedkey.s == true) {
+                break;
+              }
+              if (speed - slow > 0) {
+                shiftZ = -(speed - slow); // 減速度分初期速度から減らす
+              }
+              isPressedkey.w = true;
+              break;
+
+            case "a":
+              if (isPressedkey.d == true) {
+                break;
+              }
+              if (speed - slow > 0) {
+                shiftX = -(speed - slow);
+              }
+              isPressedkey.a = true;
+              break;
+
+            case "s":
+              if (isPressedkey.w == true) {
+                break;
+              }
+              if (speed - slow > 0) {
+                shiftZ = speed - slow;
+              }
+              isPressedkey.s = true;
+              break;
+
+            case "d":
+              if (isPressedkey.a == true) {
+                break;
+              }
+              if (speed - slow > 0) {
+                shiftX = speed - slow;
+              }
+              shiftX = speed - slow;
+              isPressedkey.d = true;
+              break;
+
+            case "v":
+              if (isPressedkey.v == false) {
+                isPressedkey.v = true;
+                snowball_focus = -snowball_focus;
+              }
+              break;
+          }
+        });
+        // キーを離した時
+        document.addEventListener("keyup", function (e) {
+          switch (e.key) {
+            case "w":
+              if (isPressedkey.s == true) {
+                break;
+              }
+              shiftZ = 0;
+              isPressedkey.w = false;
+              break;
+
+            case "a":
+              if (isPressedkey.d == true) {
+                break;
+              }
+              shiftX = 0;
+              isPressedkey.a = false;
+              break;
+
+            case "s":
+              if (isPressedkey.w == true) {
+                break;
+              }
+              shiftZ = 0;
+              isPressedkey.s = false;
+              break;
+
+            case "d":
+              if (isPressedkey.a == true) {
+                break;
+              }
+              shiftX = 0;
+              isPressedkey.d = false;
+              break;
+
+            case "v":
+              isPressedkey.v = false;
+              break;
+          }
+        });
+
+        // 形状：雪玉1
+        // パーツをグループに登録するためのグループ（入れ物）を定義
+
+        var sphere_1 = new THREE.SphereGeometry(rads, rads, rads);
+        var material_1 = new THREE.MeshPhongMaterial({ color: 0xffffff });
+        snowball_1 = new THREE.Mesh(sphere_1, material_1);
+        snowball_1.position.set(50, 0.2, 0);
+
+        scene.add(snowball_1);
+        
+        // 形状：雪玉2
+        var sphere_2 = new THREE.SphereGeometry(rads, rads, rads);
+        var material_2 = new THREE.MeshPhongMaterial({ color: 0xffffff });
+        snowball_2 = new THREE.Mesh(sphere_2, material_2);
+        snowball_2.position.set(-50, 0.2, 0);
+
+        scene.add(snowball_2);
+
+        //// 形状3：床面
+        var geometry1 = new THREE.BoxGeometry(width, 0.1, height);
+        var material1 = new THREE.MeshPhongMaterial({ color: 0xd3d3d3 });
+        var floor = new THREE.Mesh(geometry1, material1);
+        floor.position.set(0, -10, 0);
+        // シャドウ（影）を有効にする
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // カメラを設定
+        camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
+        camera.position.set(0, 200, 520);
+        camera.lookAt(scene.position);
+
+        //レンダラを作成
+        renderer = new THREE.WebGLRenderer({
+          canvas: document.getElementById("canvas1"),
+        });
+        renderer.setSize(width, height);
+
+        // レンダラで影を有効にする
+        renderer.shadowMap.enabled = true;
+        update();
+      }
+
+      // 1フレームの処理
+      function update() {
+
+        //雪玉の中心間距離を計算
+        distance = Math.sqrt(
+          Math.pow(snowball_1.position.x - snowball_2.position.x, 2) +
+            Math.pow(snowball_1.position.y - snowball_2.position.y, 2) +
+            Math.pow(snowball_1.position.z - snowball_2.position.z, 2)
+        );
+
+        //接触判定条件: 非接触かつ、中心間距離が各雪玉の半径の和より小さい
+        if (isEnd == false && distance <= (snowball_1.scale.x + snowball_2.scale.x) * rads) {
+            isEnd == true;
+            camera.position.set(0, 100, 520); //カメラを中央に移動させる
+            camera.lookAt(scene.position);
+
+            switch(snowball_focus){  // 操作していた雪玉を上側に置く
+              case 1: {
+                //雪玉を中央に移動させる、雪だるまの形に設置する
+                snowball_1.position.set(0, snowball_2.scale.x * rads + snowball_1.scale.x * rads, 0);
+                snowball_2.position.set(0, snowball_2.scale.x * rads - rads, 0);
+
+                //点数計算
+                if(snowball_1.scale.x > snowball_2.scale.x) //上が下より大きい
+                {
+                  var preformat_score = snowball_2.scale.x / snowball_1.scale.x;
+                  preformat_score -= ratio_snowman; //理想比率との差を計算
+                  if(preformat_score < 0) //絶対値に変換
+                  {
+                    preformat_score = -preformat_score;
+                  }
+
+                  preformat_score = 50 * (1 - preformat_score); //50点から減点する
+                }
+                else
+                {
+                  var preformat_score = snowball_1.scale.x / snowball_2.scale.x; //上が下より小さい
+                  preformat_score -= ratio_snowman;
+                  if(preformat_score < 0)
+                  {
+                    preformat_score = -preformat_score;
+                  }
+
+                  preformat_score = 50 * (1 + (1 - preformat_score)); //50点から加算する
+                }
+                break;
+              }
+              case -1:{
+                snowball_1.position.set(0, snowball_1.scale.x * rads - rads, 0);
+                snowball_2.position.set(0, snowball_1.scale.x * rads + snowball_2.scale.x * rads, 0);
+                
+               
+              if(snowball_2.scale > snowball_1.scale)
+                {
+                  var preformat_score = snowball_1.scale.x / snowball_2.scale.x;
+                  preformat_score -= ratio_snowman;
+                  if(preformat_score < 0)
+                  {
+                    preformat_score = -preformat_score;
+                  }
+
+                  preformat_score = 50 * (1 - preformat_score);
+                }
+                else
+                {
+                  var preformat_score = snowball_2.scale.x / snowball_1.scale.x;
+                  preformat_score -= ratio_snowman;
+                  if(preformat_score < 0)
+                  {
+                    preformat_score = -preformat_score;
+                  }
+
+                  preformat_score = 50 * (1 + (1 - preformat_score));
+                }
+                break;
+              }
+              default: break;
+            }
+            //雪だるまを白色にする
+            snowball_1.material.color.set(0xffffff);
+            snowball_2.material.color.set(0xffffff);
+            score = Math.round(preformat_score * (1 - 0.1 * (goodscale_snowman - (snowball_1.scale.x + snowball_2.scale.x)))); //理想サイズと実サイズとの差に応じてスコアを補正する(最高値から離れていると減点する)
+            document.getElementById("iscore").innerHTML = score; // 点数をHTMLに表示
+          }
+          else{ //接触していない場合
+            movespeed = Math.sqrt(Math.pow(shiftX, 2) + Math.pow(shiftZ, 2)); //現在の移動速度を計算する
+            switch (snowball_focus) { // 現在どの雪玉を操作しているかでswitch
+              case 1: {
+                snowball_1.material.color.set(0x00ff00); //操作している方の雪玉を緑色にする
+                snowball_2.material.color.set(0xffffff); //操作していない方の雪玉を白色にする
+
+                //操作
+                snowball_1.position.x += shiftX; 
+                snowball_1.position.z += shiftZ;
+                snowball_1.position.y = snowball_1.scale.x * rads - rads; //雪玉の大きさに応じて中心点を移動させる
+
+                snowball_1.scale.set( //現在の移動速度に応じて雪玉を大きくする
+                  snowball_1.scale.x + 0.01 * movespeed, 
+                  snowball_1.scale.x + 0.01 * movespeed,
+                  snowball_1.scale.x + 0.01 * movespeed
+                );
+                if (slow_1 < speed - 0.01) { //現在の移動速度に応じて減速度を小さくする
+                  slow_1 += 0.005 * movespeed;
+                } else if (slow_1 < speed) { //減速度が一定の速度(speed - 0.01)を下回ると固定する
+                  slow_1 += 0.0005;
+                } else {
+                  slow_1 = speed; //完全停止
+                }
+
+                slow = slow_1; //各雪玉の減速度を反映させる
+                break;
+              }
+              case -1: {
+                snowball_1.material.color.set(0xffffff);
+                snowball_2.material.color.set(0x00ff00);
+
+                snowball_2.position.x += shiftX;
+                snowball_2.position.z += shiftZ;
+                snowball_2.position.y = snowball_2.scale.x * rads - rads;
+
+                snowball_2.scale.set(
+                  snowball_2.scale.x + 0.01 * movespeed,
+                  snowball_2.scale.x + 0.01 * movespeed,
+                  snowball_2.scale.x + 0.01 * movespeed
+                );
+
+                if (slow_2 < speed - 0.01) {
+                  slow_2 += 0.005 * movespeed;
+                } else if (slow_2 < speed) {
+                  slow_2 += 0.0005;
+                } else {
+                  slow_2 = speed;
+                }
+
+                slow = slow_2;
+                break;
+              }
+            }
+        }
+        renderer.render(scene, camera); // レンダラーに描画することを命令する
+        requestAnimationFrame(update);
+      }
+    </script>
+  </head>
+
+  <body>
+    <h1>雪だるま作り！26002101083 紙谷勇輝</h1>
+
+    <canvas id="canvas1" style="width: 960; height: 600;"></canvas>
+    <p>雪だるまを作りましょう。上下で4:5の比率に近づくと高得点！サイズが大きいともっと高得点！ただし、転がし過ぎると雪玉が重くなって動かせなくなります。</p>
+    <p>操作説明 移動:WASD, 雪玉切替:V</p> 
+    <p>この雪だるまは<span id="iscore">n</span>点です。<span id="end"></span></p>
+    <p>ここに工夫した点を書いて作品をアピールしてください．</p>
+    <p>-------------------------------------------------------------------<br>
+    雪玉の接触判定の計算式を工夫した。また、雪玉を大きくする方法と減速システムをよく考えた。</p>
+  </body>
+</html>
